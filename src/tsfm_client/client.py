@@ -116,7 +116,8 @@ class TSFMClient:
         data: Union[TimeSeriesData, pd.Series, List[float]] = None,
         forecast_horizon: int = 12,
         confidence_intervals: bool = False,
-        quantiles: Optional[List[float]] = None
+        quantiles: Optional[List[float]] = None,
+        num_samples: Optional[int] = None
     ) -> PredictionResponse:
         """
         Make time series prediction
@@ -127,6 +128,7 @@ class TSFMClient:
             forecast_horizon: Number of steps to forecast
             confidence_intervals: Whether to include confidence intervals
             quantiles: Quantiles to compute
+            num_samples: Number of samples to generate
             
         Returns:
             PredictionResponse with forecasts and metadata
@@ -149,7 +151,8 @@ class TSFMClient:
             data=ts_data,
             forecast_horizon=forecast_horizon,
             confidence_intervals=confidence_intervals,
-            quantiles=quantiles
+            quantiles=quantiles,
+            num_samples=num_samples
         )
         
         # Make API call
@@ -238,6 +241,7 @@ def predict(
     forecast_horizon: int = 12,
     confidence_intervals: bool = False,
     quantiles: Optional[List[float]] = None,
+    num_samples: Optional[int] = None,
     base_url: str = "http://localhost:8000"
 ) -> PredictionResponse:
     """
@@ -250,6 +254,7 @@ def predict(
         forecast_horizon: Number of steps to forecast
         confidence_intervals: Whether to include confidence intervals
         quantiles: Quantiles to compute
+        num_samples: Number of samples to generate
         base_url: Base URL of the TSFM API
         
     Returns:
@@ -275,7 +280,8 @@ def predict(
         data=data,
         forecast_horizon=forecast_horizon,
         confidence_intervals=confidence_intervals,
-        quantiles=quantiles
+        quantiles=quantiles,
+        num_samples=num_samples
     )
 
 

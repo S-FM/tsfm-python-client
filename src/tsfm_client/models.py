@@ -60,6 +60,7 @@ class PredictionRequest(BaseModel):
     forecast_horizon: int = Field(12, description="Number of steps to forecast", ge=1, le=96)
     confidence_intervals: bool = Field(False, description="Whether to include confidence intervals")
     quantiles: Optional[List[float]] = Field(None, description="Quantiles to compute")
+    num_samples: Optional[int] = Field(None, description="Number of samples to generate", ge=1)
     
     def model_validate(self):
         """Validate the prediction request"""
