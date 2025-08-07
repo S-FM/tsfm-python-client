@@ -3,26 +3,25 @@ Data models for TSFM Client
 """
 
 from typing import List, Dict, Any, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 import pandas as pd
 import numpy as np
 
 
 class TimeSeriesData(BaseModel):
     """Time series data structure"""
-    values: List[List[float]] | List[float] = Field(..., description="Time series values (univariate or multivariate)")
+    values: np.ndarray = Field(..., description="Time series values as numpy array (1D for univariate, 2D for multivariate)")
     timestamps: Optional[List[str]] = Field(None, description="Optional timestamps")
     frequency: Optional[str] = Field(None, description="Frequency of the time series (e.g., '1H', '1D')")
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)  # Allow numpy arrays in Pydantic v2
+    
     
     @classmethod
     def from_pandas(cls, data: Union[pd.Series, pd.DataFrame], frequency: Optional[str] = None) -> "TimeSeriesData":
         """Create TimeSeriesData from pandas Series or DataFrame"""
-        if isinstance(data, pd.Series):
-            # Univariate
-            values = data.values.tolist()
-        else:
-            # Multivariate DataFrame - convert to list of lists
-            values = data.values.tolist()
+        # Use numpy array directly (no conversion to list)
+        values = data.values
         
         timestamps = None
         
@@ -38,10 +37,19 @@ class TimeSeriesData(BaseModel):
         )
     
     @classmethod
+    def from_numpy(cls, values: np.ndarray, timestamps: Optional[List[str]] = None, frequency: Optional[str] = None) -> "TimeSeriesData":
+        """Create TimeSeriesData from numpy array (most efficient)"""
+        return cls(
+            values=values,
+            timestamps=timestamps,
+            frequency=frequency
+        )
+    
+    @classmethod
     def from_list(cls, values: Union[List[float], List[List[float]]], timestamps: Optional[List[str]] = None, frequency: Optional[str] = None) -> "TimeSeriesData":
         """Create TimeSeriesData from list of values (univariate or multivariate)"""
         return cls(
-            values=values,
+            values=np.array(values),
             timestamps=timestamps,
             frequency=frequency
         )
@@ -53,17 +61,17 @@ class TimeSeriesData(BaseModel):
         else:
             index = range(len(self.values))
         
-        # Check if multivariate (list of lists)
-        if self.values and isinstance(self.values[0], (list, tuple)):
+        # Check if multivariate (2D array)
+        if self.values.ndim == 2:
             # Multivariate - return DataFrame
             return pd.DataFrame(self.values, index=index)
         else:
             # Univariate - return Series
             return pd.Series(self.values, index=index)
     
-    def to_numpy(self) -> np.ndarray:
-        """Convert to numpy array"""
-        return np.array(self.values)
+    def get_values(self) -> np.ndarray:
+        """Get the underlying numpy array values"""
+        return self.values
 
 
 class PredictionRequest(BaseModel):
@@ -74,6 +82,7 @@ class PredictionRequest(BaseModel):
     quantiles: Optional[List[float]] = Field(None, description="Quantiles to compute")
     num_samples: Optional[int] = Field(None, description="Number of samples to generate", ge=1)
     time_interval_seconds: Optional[int] = Field(None, description="Time interval between data points in seconds", ge=1)
+    
     
     @classmethod
     def model_validate(cls, v):

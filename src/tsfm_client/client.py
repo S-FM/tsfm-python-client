@@ -4,9 +4,11 @@ TSFM Client - Main client class for interacting with TSFM Inference Platform
 
 import httpx
 import os
+import json
 from typing import List, Dict, Any, Optional, Union
 from urllib.parse import urljoin
 import pandas as pd
+import numpy as np
 
 from .models import (
     TimeSeriesData,
@@ -96,6 +98,17 @@ class TSFMClient:
                 message = f"HTTP {response.status_code}"
             raise APIError(message, response.status_code)
     
+    def _serialize_for_json(self, obj: Any) -> Any:
+        """Recursively convert numpy arrays to lists for JSON serialization"""
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {key: self._serialize_for_json(value) for key, value in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [self._serialize_for_json(item) for item in obj]
+        else:
+            return obj
+    
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Any:
         """Make HTTP request with retry logic"""
         url = urljoin(self.base_url, endpoint)
@@ -112,7 +125,7 @@ class TSFMClient:
     def predict(
         self,
         model_name: str = "chronos-t5-small",
-        data: Union[TimeSeriesData, pd.Series, List[float], List[List[float]]] = None,
+        data: Union[TimeSeriesData, pd.Series, List[float], List[List[float]], np.ndarray] = None,
         forecast_horizon: int = 12,
         confidence_intervals: Optional[List[float]] = None,
         quantiles: Optional[List[float]] = None,
@@ -124,7 +137,7 @@ class TSFMClient:
         
         Args:
             model_name: Name of the model to use
-            data: Time series data (TimeSeriesData, pandas Series, list of floats, or list of lists for multivariate)
+            data: Time series data (TimeSeriesData, pandas Series, list of floats, list of lists for multivariate, or numpy array)
             forecast_horizon: Number of steps to forecast
             confidence_intervals: List of confidence levels (e.g., [0.8, 0.95] for 80% and 95% CIs, None for point estimate only)
             quantiles: Quantiles to compute
@@ -140,18 +153,19 @@ class TSFMClient:
         # Convert input data to TimeSeriesData
         if isinstance(data, pd.Series):
             ts_data = TimeSeriesData.from_pandas(data)
-        elif isinstance(data, list):
-            # Check if it's multivariate (list of lists) or univariate (list of floats)
-            if data and isinstance(data[0], (list, tuple)):
-                # Multivariate - list of lists
-                ts_data = TimeSeriesData(values=data)
+        elif isinstance(data, np.ndarray):
+            # Handle numpy arrays - most efficient, no conversion needed
+            if data.ndim == 1 or data.ndim == 2:
+                ts_data = TimeSeriesData.from_numpy(data)
             else:
-                # Univariate - list of floats
-                ts_data = TimeSeriesData.from_list(data)
+                raise ValueError("Numpy arrays must be 1D (univariate) or 2D (multivariate)")
+        elif isinstance(data, list):
+            # Convert lists to numpy arrays using from_list method
+            ts_data = TimeSeriesData.from_list(data)
         elif isinstance(data, TimeSeriesData):
             ts_data = data
         else:
-            raise ValueError("Data must be TimeSeriesData, pandas Series, list of floats, or list of lists (multivariate)")
+            raise ValueError("Data must be TimeSeriesData, pandas Series, list of floats, list of lists (multivariate), or numpy array")
         
         # Create request
         request = PredictionRequest(
@@ -163,11 +177,15 @@ class TSFMClient:
             time_interval_seconds=time_interval_seconds
         )
         
+        # Serialize request with numpy array handling
+        request_data = self._serialize_for_json(request.model_dump())
+        
         # Make API call
         response_data = self._make_request(
             "POST",
             f"/api/v1/predict/{model_name}",
-            json=request.model_dump()
+            content=json.dumps(request_data),
+            headers={"Content-Type": "application/json"}
         )
         
         return PredictionResponse(**response_data)
@@ -243,7 +261,7 @@ class TSFMClient:
 _global_client = None
 
 def predict(
-    data: Union[TimeSeriesData, pd.Series, List[float], List[List[float]]],
+    data: Union[TimeSeriesData, pd.Series, List[float], List[List[float]], np.ndarray],
     api_key: Optional[str] = None,
     model: str = "chronos-t5-small",
     forecast_horizon: int = 12,
@@ -257,7 +275,7 @@ def predict(
     Convenience function for quick predictions
     
     Args:
-        data: Time series data (univariate list, multivariate list of lists, or pandas Series)
+        data: Time series data (univariate list, multivariate list of lists, pandas Series, or numpy array)
         api_key: API key for authentication (or set TSFM_API_KEY environment variable)
         model: Name of the model to use
         forecast_horizon: Number of steps to forecast

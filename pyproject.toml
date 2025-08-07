@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "tsfm-client"
-version = "0.1.0"
-description = "Python client library for TSFM Inference Platform"
+version = "0.2.2"
+description = "Python client for TSFM time series forecasting with numpy support, confidence intervals, and multivariate predictions"
 authors = ["Andrei Chernov <chernov.andrey.998@gmail.com>"]
 readme = "README.md"
 license = "MIT"
 homepage = "https://github.com/S-FM/tsfm-python-client"
 repository = "https://github.com/S-FM/tsfm-python-client"
-keywords = ["time-series", "forecasting", "foundation-models", "api-client"]
+keywords = ["time-series", "forecasting", "foundation-models", "api-client", "numpy", "multivariate", "confidence-intervals", "tsfm", "chronos", "toto"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
