@@ -28,7 +28,7 @@ class TSFMClient:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        base_url: str = "http://localhost:8000",
+        base_url: str = "https://api.faim.it.com",
         timeout: float = 30.0,
         max_retries: int = 3
     ):
@@ -99,7 +99,6 @@ class TSFMClient:
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Any:
         """Make HTTP request with retry logic"""
         url = urljoin(self.base_url, endpoint)
-        
         for attempt in range(self.max_retries + 1):
             try:
                 response = self.client.request(method, url, **kwargs)
@@ -113,22 +112,24 @@ class TSFMClient:
     def predict(
         self,
         model_name: str = "chronos-t5-small",
-        data: Union[TimeSeriesData, pd.Series, List[float]] = None,
+        data: Union[TimeSeriesData, pd.Series, List[float], List[List[float]]] = None,
         forecast_horizon: int = 12,
-        confidence_intervals: bool = False,
+        confidence_intervals: Optional[List[float]] = None,
         quantiles: Optional[List[float]] = None,
-        num_samples: Optional[int] = None
+        num_samples: Optional[int] = None,
+        time_interval_seconds: Optional[int] = None
     ) -> PredictionResponse:
         """
         Make time series prediction
         
         Args:
             model_name: Name of the model to use
-            data: Time series data (TimeSeriesData, pandas Series, or list of floats)
+            data: Time series data (TimeSeriesData, pandas Series, list of floats, or list of lists for multivariate)
             forecast_horizon: Number of steps to forecast
-            confidence_intervals: Whether to include confidence intervals
+            confidence_intervals: List of confidence levels (e.g., [0.8, 0.95] for 80% and 95% CIs, None for point estimate only)
             quantiles: Quantiles to compute
             num_samples: Number of samples to generate
+            time_interval_seconds: Time interval between data points in seconds
             
         Returns:
             PredictionResponse with forecasts and metadata
@@ -140,11 +141,17 @@ class TSFMClient:
         if isinstance(data, pd.Series):
             ts_data = TimeSeriesData.from_pandas(data)
         elif isinstance(data, list):
-            ts_data = TimeSeriesData.from_list(data)
+            # Check if it's multivariate (list of lists) or univariate (list of floats)
+            if data and isinstance(data[0], (list, tuple)):
+                # Multivariate - list of lists
+                ts_data = TimeSeriesData(values=data)
+            else:
+                # Univariate - list of floats
+                ts_data = TimeSeriesData.from_list(data)
         elif isinstance(data, TimeSeriesData):
             ts_data = data
         else:
-            raise ValueError("Data must be TimeSeriesData, pandas Series, or list of floats")
+            raise ValueError("Data must be TimeSeriesData, pandas Series, list of floats, or list of lists (multivariate)")
         
         # Create request
         request = PredictionRequest(
@@ -152,7 +159,8 @@ class TSFMClient:
             forecast_horizon=forecast_horizon,
             confidence_intervals=confidence_intervals,
             quantiles=quantiles,
-            num_samples=num_samples
+            num_samples=num_samples,
+            time_interval_seconds=time_interval_seconds
         )
         
         # Make API call
@@ -235,26 +243,28 @@ class TSFMClient:
 _global_client = None
 
 def predict(
-    data: Union[TimeSeriesData, pd.Series, List[float]],
+    data: Union[TimeSeriesData, pd.Series, List[float], List[List[float]]],
     api_key: Optional[str] = None,
     model: str = "chronos-t5-small",
     forecast_horizon: int = 12,
-    confidence_intervals: bool = False,
+    confidence_intervals: Optional[List[float]] = None,
     quantiles: Optional[List[float]] = None,
     num_samples: Optional[int] = None,
+    time_interval_seconds: Optional[int] = None,
     base_url: str = "http://localhost:8000"
 ) -> PredictionResponse:
     """
     Convenience function for quick predictions
     
     Args:
-        data: Time series data
+        data: Time series data (univariate list, multivariate list of lists, or pandas Series)
         api_key: API key for authentication (or set TSFM_API_KEY environment variable)
         model: Name of the model to use
         forecast_horizon: Number of steps to forecast
-        confidence_intervals: Whether to include confidence intervals
+        confidence_intervals: List of confidence levels (e.g., [0.8, 0.95] for 80% and 95% CIs, None for point estimate only)
         quantiles: Quantiles to compute
         num_samples: Number of samples to generate
+        time_interval_seconds: Time interval between data points in seconds
         base_url: Base URL of the TSFM API
         
     Returns:
@@ -281,7 +291,8 @@ def predict(
         forecast_horizon=forecast_horizon,
         confidence_intervals=confidence_intervals,
         quantiles=quantiles,
-        num_samples=num_samples
+        num_samples=num_samples,
+        time_interval_seconds=time_interval_seconds
     )
 
 
